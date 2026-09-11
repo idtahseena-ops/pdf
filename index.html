@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+  <title>PDF Web Viewer • Talaqqi</title>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- PDF.js Engine -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  </script>
+
+  <style>
+    :root {
+      --bg-dark: #090d16;
+      --bg-surface: #0f172a;
+      --bg-card: #1e293b;
+      --bg-card-hover: #27354f;
+      --primary: #4f46e5;
+      --primary-glow: rgba(79, 70, 229, 0.35);
+      --gold: #f59e0b;
+      --gold-surface: rgba(245, 158, 11, 0.12);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: rgba(255, 255, 255, 0.08);
+      --border-focus: rgba(99, 102, 241, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    /* Top Navigation Bar */
+    header {
+      background: rgba(15, 23, 42, 0.95);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    body.is-fullscreen header {
+      display: none;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #4f46e5, #06b6d4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px var(--primary-glow);
+    }
+
+    .brand-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #ffffff;
+      max-width: 220px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-main);
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-focus);
+    }
+
+    .btn-gold {
+      background: var(--gold-surface);
+      border-color: rgba(245, 158, 11, 0.35);
+      color: #fbbf24;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 8px var(--primary-glow);
+    }
+    .btn-primary:hover {
+      background: #4338ca;
+    }
+
+    .btn-icon {
+      padding: 6px;
+      border-radius: 8px;
+    }
+
+    /* Page Navigation Capsule */
+    .page-nav {
+      display: flex;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 2px 8px;
+      gap: 3px;
+    }
+
+    .page-input {
+      width: 34px;
+      background: transparent;
+      border: none;
+      color: #fbbf24;
+      font-weight: 800;
+      font-size: 12.5px;
+      text-align: center;
+      outline: none;
+    }
+
+    .page-total {
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+
+    /* Zoom Indicator Badge */
+    .zoom-badge {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 700;
+      min-width: 38px;
+      text-align: center;
+    }
+
+    /* Main PDF Viewer Container */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 8px;
+      position: relative;
+      width: 100%;
+      overflow: auto;
+    }
+
+    body.is-fullscreen main {
+      padding: 0;
+      height: 100vh;
+      width: 100vw;
+      background: #000000;
+    }
+
+    #viewer-box {
+      width: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: calc(100vh - 65px);
+      position: relative;
+    }
+
+    body.is-fullscreen #viewer-box {
+      min-height: 100vh;
+    }
+
+    #canvas-wrapper {
+      width: 100%;
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      padding: 8px;
+      overflow: auto;
+    }
+
+    body.is-fullscreen #canvas-wrapper {
+      padding: 0;
+      align-items: center;
+    }
+
+    #pdf-canvas {
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+      border-radius: 6px;
+      background: #ffffff;
+      display: none;
+      margin: auto;
+      transition: width 0.15s ease, height 0.15s ease;
+    }
+
+    body.is-fullscreen #pdf-canvas {
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    /* Empty / Upload Dropzone Screen */
+    #empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+      text-align: center;
+      gap: 14px;
+      width: 100%;
+      max-width: 480px;
+      margin: auto;
+    }
+
+    .empty-icon {
+      width: 60px;
+      height: 60px;
+      border-radius: 18px;
+      background: rgba(79, 70, 229, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #818cf8;
+      margin-bottom: 4px;
+    }
+
+    .empty-title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #ffffff;
+    }
+
+    .empty-sub {
+      font-size: 12.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    .upload-btn-lg {
+      background: var(--primary);
+      border: none;
+      color: #ffffff;
+      padding: 11px 22px;
+      border-radius: 10px;
+      font-size: 13.5px;
+      font-weight: 700;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 8px 20px var(--primary-glow);
+      transition: all 0.2s ease;
+      margin-top: 6px;
+    }
+    .upload-btn-lg:hover {
+      background: #4338ca;
+      transform: translateY(-2px);
+    }
+
+    /* Floating Fullscreen Controls Bar */
+    .fullscreen-floating-bar {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(15, 23, 42, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 30px;
+      padding: 6px 14px;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.85);
+      z-index: 100;
+    }
+
+    body.is-fullscreen .fullscreen-floating-bar {
+      display: flex;
+    }
+
+    /* Loading Overlay */
+    #loading-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(4px);
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      z-index: 20;
+    }
+
+    .spinner {
+      width: 34px;
+      height: 34px;
+      border: 3px solid rgba(79, 70, 229, 0.2);
+      border-top-color: #818cf8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Modal Unggah File */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+
+    .modal-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      width: 100%;
+      max-width: 440px;
+      padding: 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .dropzone {
+      border: 2px dashed rgba(79, 70, 229, 0.4);
+      background: rgba(79, 70, 229, 0.05);
+      border-radius: 12px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s;
+    }
+    .dropzone:hover {
+      background: rgba(79, 70, 229, 0.1);
+      border-color: var(--primary);
+    }
+
+    .url-input {
+      background: var(--bg-dark);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 12px;
+      color: #ffffff;
+      font-size: 13px;
+      outline: none;
+      width: 100%;
+    }
+    .url-input:focus {
+      border-color: var(--primary);
+    }
+
+    @media (max-width: 600px) {
+      .brand-title { max-width: 110px; font-size: 12.5px; }
+      .btn span { display: none; }
+      .btn-labeled span { display: inline; }
+      .zoom-badge { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Navigation Bar -->
+  <header id="main-header">
+    <div class="brand">
+      <div class="brand-icon">
+        <i data-lucide="file-text" style="color: #ffffff; width: 16px; height: 16px;"></i>
+      </div>
+      <div class="brand-title" id="doc-title">Materi PDF Talaqqi</div>
+    </div>
+
+    <!-- Action Controls -->
+    <div class="controls">
+      <!-- Prev -->
+      <button class="btn btn-icon" onclick="prevPage()" title="Halaman Sebelumnya">
+        <i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i>
+      </button>
+
+      <!-- Page Capsule -->
+      <div class="page-nav">
+        <input type="number" id="page-num" class="page-input" value="1" min="1" onchange="jumpToPage(this.value)">
+        <span class="page-total">/ <span id="page-count">1</span></span>
+      </div>
+
+      <!-- Next -->
+      <button class="btn btn-icon" onclick="nextPage()" title="Halaman Selanjutnya">
+        <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+      </button>
+
+      <!-- Zoom Controls -->
+      <button class="btn btn-icon" onclick="zoomChange(-0.25)" title="Perkecil (-)">
+        <i data-lucide="zoom-out" style="width: 15px; height: 15px;"></i>
+      </button>
+      <span class="zoom-badge" id="zoom-text">100%</span>
+      <button class="btn btn-icon" onclick="zoomChange(0.25)" title="Perbesar (+)">
+        <i data-lucide="zoom-in" style="width: 15px; height: 15px;"></i>
+      </button>
+
+      <!-- Fit Width -->
+      <button class="btn btn-icon" onclick="fitToWidth()" title="Sesuaikan Lebar Layar">
+        <i data-lucide="expand" style="width: 15px; height: 15px;"></i>
+      </button>
+
+      <!-- Fullscreen -->
+      <button class="btn btn-primary btn-labeled" onclick="toggleFullScreen()" title="Layar Penuh">
+        <i data-lucide="maximize" style="width: 14px; height: 14px;"></i>
+        <span>Full Screen</span>
+      </button>
+
+      <!-- Ganti PDF -->
+      <button class="btn btn-gold btn-labeled" onclick="openUploadModal()">
+        <i data-lucide="upload" style="width: 14px; height: 14px;"></i>
+        <span>Pilih PDF</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main PDF Viewer Area -->
+  <main id="main-container">
+    <div id="viewer-box">
+      <!-- Loading Overlay -->
+      <div id="loading-overlay">
+        <div class="spinner"></div>
+        <div id="loading-text" style="font-size: 13px; font-weight: 600; color: #cbd5e1;">Memuat Dokumen PDF...</div>
+      </div>
+
+      <!-- Tampilan Awal / Belum Ada File -->
+      <div id="empty-state">
+        <div class="empty-icon">
+          <i data-lucide="file-up" style="width: 30px; height: 30px;"></i>
+        </div>
+        <h2 class="empty-title">Buka Dokumen PDF Anda</h2>
+        <p class="empty-sub">Pilih file PDF materi atau kitab Anda untuk ditampilkan sebagai web page.</p>
+        <button class="upload-btn-lg" onclick="document.getElementById('hidden-file-input').click()">
+          <i data-lucide="folder-open" style="width: 16px; height: 16px;"></i>
+          Pilih File PDF
+        </button>
+        <input type="file" id="hidden-file-input" accept="application/pdf" style="display:none;" onchange="handleFile(event)">
+      </div>
+
+      <!-- Canvas Rendering Halaman PDF -->
+      <div id="canvas-wrapper">
+        <canvas id="pdf-canvas"></canvas>
+      </div>
+    </div>
+  </main>
+
+  <!-- Floating Navigation Bar saat Full Screen -->
+  <div class="fullscreen-floating-bar" id="fullscreen-floating-bar">
+    <button class="btn btn-icon" onclick="prevPage()" title="Halaman Sebelumnya">
+      <i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i>
+    </button>
+    <div class="page-nav">
+      <span id="fs-page-num" style="color:#fbbf24; font-weight:800; font-size:12.5px;">1</span>
+      <span class="page-total">/ <span id="fs-page-count">1</span></span>
+    </div>
+    <button class="btn btn-icon" onclick="nextPage()" title="Halaman Selanjutnya">
+      <i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i>
+    </button>
+    <button class="btn btn-icon" onclick="zoomChange(-0.25)" title="Perkecil">
+      <i data-lucide="zoom-out" style="width: 15px; height: 15px;"></i>
+    </button>
+    <span id="fs-zoom-text" style="color:#cbd5e1; font-size:11.5px; font-weight:700;">100%</span>
+    <button class="btn btn-icon" onclick="zoomChange(0.25)" title="Perbesar">
+      <i data-lucide="zoom-in" style="width: 15px; height: 15px;"></i>
+    </button>
+    <button class="btn btn-primary" onclick="toggleFullScreen()" title="Keluar Full Screen">
+      <i data-lucide="minimize" style="width: 14px; height: 14px;"></i>
+      <span>Keluar</span>
+    </button>
+  </div>
+
+  <!-- Modal Pilih PDF / Masukkan URL -->
+  <div class="modal-overlay" id="upload-modal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <i data-lucide="file-text" style="color:var(--gold);"></i>
+          <span class="modal-title">Ganti File Dokumen PDF</span>
+        </div>
+        <button class="btn btn-icon" onclick="closeUploadModal()">
+          <i data-lucide="x" style="width:18px; height:18px;"></i>
+        </button>
+      </div>
+
+      <div class="dropzone" onclick="document.getElementById('modal-file-input').click()">
+        <i data-lucide="upload-cloud" style="width: 32px; height: 32px; color: #818cf8;"></i>
+        <div style="font-weight: 700; font-size: 13.5px;">Pilih File PDF dari Perangkat</div>
+        <div style="font-size: 11.5px; color: var(--text-muted);">Klik untuk memilih dokumen .pdf</div>
+        <input type="file" id="modal-file-input" accept="application/pdf" style="display:none;" onchange="handleFile(event)">
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px; margin: 4px 0;">
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+        <span style="font-size:11px; color:var(--text-muted); font-weight:700;">ATAU DARI LINK URL</span>
+        <div style="flex:1; height:1px; background:var(--border);"></div>
+      </div>
+
+      <div style="display:flex; gap:8px;">
+        <input type="url" id="url-input" class="url-input" placeholder="https://domain.com/dokumen.pdf">
+        <button class="btn btn-gold" onclick="loadFromUrlInput()">
+          <span>Buka</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    lucide.createIcons();
+
+    let pdfDoc = null;
+    let pageNum = 1;
+    let pageRendering = false;
+    let pageNumPending = null;
+    let zoomMultiplier = 1.0; // 100% basis
+    let baseViewportWidth = 600;
+
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    const emptyState = document.getElementById('empty-state');
+    const pageNumInput = document.getElementById('page-num');
+    const pageCountDisplay = document.getElementById('page-count');
+    const fsPageNum = document.getElementById('fs-page-num');
+    const fsPageCount = document.getElementById('fs-page-count');
+    const zoomText = document.getElementById('zoom-text');
+    const fsZoomText = document.getElementById('fs-zoom-text');
+    const docTitleDisplay = document.getElementById('doc-title');
+
+    function showLoading(msg) {
+      loadingOverlay.style.display = 'flex';
+      loadingText.innerText = msg || 'Memuat...';
+    }
+
+    function hideLoading() {
+      loadingOverlay.style.display = 'none';
+    }
+
+    function updateZoomDisplay() {
+      const pct = Math.round(zoomMultiplier * 100) + '%';
+      if (zoomText) zoomText.innerText = pct;
+      if (fsZoomText) fsZoomText.innerText = pct;
+    }
+
+    // Render Halaman PDF ke Canvas
+    function renderPage(num) {
+      if (!pdfDoc) return;
+      pageRendering = true;
+      showLoading(`Memuat Halaman ${num}...`);
+
+      pdfDoc.getPage(num).then(function(page) {
+        const unscaledViewport = page.getViewport({ scale: 1.0 });
+        baseViewportWidth = unscaledViewport.width;
+
+        // Hitung skala otomatis agar pas lebar layar container
+        const containerWidth = Math.max(window.innerWidth - 32, 320);
+        const fitScale = (containerWidth / unscaledViewport.width);
+        
+        // Gabungkan dengan zoomMultiplier pengguna
+        const finalScale = fitScale * zoomMultiplier;
+        const viewport = page.getViewport({ scale: finalScale });
+
+        // Set ukuran buffer canvas
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        // Set style width & height agar sesuai piksel tajam
+        canvas.style.width = viewport.width + 'px';
+        canvas.style.height = viewport.height + 'px';
+
+        const renderContext = {
+          canvasContext: ctx,
+          viewport: viewport
+        };
+
+        const renderTask = page.render(renderContext);
+        renderTask.promise.then(function() {
+          pageRendering = false;
+          hideLoading();
+          emptyState.style.display = 'none';
+          canvas.style.display = 'block';
+
+          if (pageNumPending !== null) {
+            renderPage(pageNumPending);
+            pageNumPending = null;
+          }
+        });
+      }).catch(function(err) {
+        pageRendering = false;
+        hideLoading();
+        console.error('Render Page Error:', err);
+      });
+
+      pageNumInput.value = num;
+      if (fsPageNum) fsPageNum.innerText = num;
+      updateZoomDisplay();
+    }
+
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
+    }
+
+    function prevPage() {
+      if (pageNum <= 1) return;
+      pageNum--;
+      queueRenderPage(pageNum);
+    }
+
+    function nextPage() {
+      if (!pdfDoc || pageNum >= pdfDoc.numPages) return;
+      pageNum++;
+      queueRenderPage(pageNum);
+    }
+
+    function jumpToPage(val) {
+      const target = parseInt(val, 10);
+      if (isNaN(target) || !pdfDoc) return;
+      pageNum = Math.max(1, Math.min(target, pdfDoc.numPages));
+      queueRenderPage(pageNum);
+    }
+
+    // Zoom In / Zoom Out langsung aktif membesarkan/mengecilkan tampilan
+    function zoomChange(delta) {
+      zoomMultiplier = Math.max(0.4, Math.min(4.0, zoomMultiplier + delta));
+      updateZoomDisplay();
+      if (pdfDoc) {
+        queueRenderPage(pageNum);
+      }
+    }
+
+    function fitToWidth() {
+      zoomMultiplier = 1.0;
+      updateZoomDisplay();
+      if (pdfDoc) {
+        queueRenderPage(pageNum);
+      }
+    }
+
+    // Toggle Mode Full Screen (Layar Penuh)
+    function toggleFullScreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().then(() => {
+          document.body.classList.add('is-fullscreen');
+          lucide.createIcons();
+          if (pdfDoc) renderPage(pageNum);
+        }).catch(err => {
+          document.body.classList.toggle('is-fullscreen');
+          if (pdfDoc) renderPage(pageNum);
+        });
+      } else {
+        if (document.exitFullscreen) {
+          document.exitFullscreen().then(() => {
+            document.body.classList.remove('is-fullscreen');
+            lucide.createIcons();
+            if (pdfDoc) renderPage(pageNum);
+          });
+        }
+      }
+    }
+
+    document.addEventListener('fullscreenchange', () => {
+      if (document.fullscreenElement) {
+        document.body.classList.add('is-fullscreen');
+      } else {
+        document.body.classList.remove('is-fullscreen');
+      }
+      lucide.createIcons();
+      if (pdfDoc) renderPage(pageNum);
+    });
+
+    window.addEventListener('resize', () => {
+      if (pdfDoc) renderPage(pageNum);
+    });
+
+    // Keyboard Shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === ' ') {
+        nextPage();
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        prevPage();
+      } else if (e.key === 'f' || e.key === 'F') {
+        toggleFullScreen();
+      } else if (e.key === '+' || e.key === '=') {
+        zoomChange(0.25);
+      } else if (e.key === '-') {
+        zoomChange(-0.25);
+      } else if (e.key === '0') {
+        fitToWidth();
+      }
+    });
+
+    // Pinch-to-zoom di HP / Touchscreen
+    let initialPinchDist = null;
+    let initialZoomOnPinch = 1.0;
+    const canvasWrapper = document.getElementById('canvas-wrapper');
+
+    canvasWrapper.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        initialPinchDist = Math.hypot(
+          e.touches[0].pageX - e.touches[1].pageX,
+          e.touches[0].pageY - e.touches[1].pageY
+        );
+        initialZoomOnPinch = zoomMultiplier;
+      }
+    }, { passive: true });
+
+    canvasWrapper.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2 && initialPinchDist) {
+        const dist = Math.hypot(
+          e.touches[0].pageX - e.touches[1].pageX,
+          e.touches[0].pageY - e.touches[1].pageY
+        );
+        const factor = dist / initialPinchDist;
+        zoomMultiplier = Math.max(0.4, Math.min(4.0, initialZoomOnPinch * factor));
+        updateZoomDisplay();
+      }
+    }, { passive: true });
+
+    canvasWrapper.addEventListener('touchend', (e) => {
+      if (initialPinchDist) {
+        initialPinchDist = null;
+        if (pdfDoc) queueRenderPage(pageNum);
+      }
+    });
+
+    // Membuka Dokumen PDF
+    function loadPdfDocument(source, title) {
+      showLoading('Membuka Dokumen PDF...');
+      
+      pdfjsLib.getDocument(source).promise.then(function(loadedDoc) {
+        pdfDoc = loadedDoc;
+        pageCountDisplay.innerText = pdfDoc.numPages;
+        if (fsPageCount) fsPageCount.innerText = pdfDoc.numPages;
+        docTitleDisplay.innerText = title || 'Dokumen PDF';
+        pageNum = 1;
+        renderPage(pageNum);
+      }).catch(function(err) {
+        hideLoading();
+        alert('Gagal membuka file PDF: ' + err.message);
+      });
+    }
+
+    // Handler Unggah File PDF dari Input
+    function handleFile(evt) {
+      const file = evt.target.files[0];
+      if (!file) return;
+
+      const fileReader = new FileReader();
+      fileReader.onload = function() {
+        const typedArray = new Uint8Array(this.result);
+        loadPdfDocument({ data: typedArray }, file.name);
+        closeUploadModal();
+      };
+      fileReader.readAsArrayBuffer(file);
+    }
+
+    function loadFromUrlInput() {
+      const url = document.getElementById('url-input').value.trim();
+      if (!url) return;
+      loadPdfDocument({ url: url }, url.split('/').pop() || 'Dokumen PDF Web');
+      closeUploadModal();
+    }
+
+    function openUploadModal() {
+      document.getElementById('upload-modal').style.display = 'flex';
+    }
+
+    function closeUploadModal() {
+      document.getElementById('upload-modal').style.display = 'none';
+    }
+
+    // Deteksi Otomatis Saat Halaman Dibuka
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const pdfUrl = urlParams.get('pdf');
+
+      if (pdfUrl) {
+        loadPdfDocument({ url: pdfUrl }, pdfUrl.split('/').pop());
+      } else {
+        fetch('./materi.pdf', { method: 'HEAD' })
+          .then(res => {
+            if (res.ok) {
+              loadPdfDocument('./materi.pdf', 'Modul Materi Pembelajaran');
+            }
+          })
+          .catch(() => {});
+      }
+    });
+  </script>
+</body>
+</html>
